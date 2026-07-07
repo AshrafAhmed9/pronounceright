@@ -45,6 +45,7 @@ def _pronunciation_assessment_header() -> str:
         "Granularity": "Phoneme",
         "Dimension": "Comprehensive",
         "EnableProsodyAssessment": "True",
+        "PhonemeAlphabet": "IPA",
     }
     payload = json.dumps(config).encode("utf-8")
     return base64.b64encode(payload).decode("ascii")
