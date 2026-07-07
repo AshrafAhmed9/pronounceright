@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_DURATION, MIN_DURATION, pickBestRecorderMimeType, processAudioFile } from "@/lib/audioProcessing";
 
+// A few seconds of buffer above the hard 30s floor: browser tab throttling and
+// encoder buffering can make the actual captured audio a couple seconds
+// shorter than the on-screen timer, so unlocking exactly at MIN_DURATION let
+// users produce clips that failed server-side validation.
+const STOP_UNLOCK_SEC = MIN_DURATION + 3;
+
 interface UploadRecorderProps {
   consentGiven: boolean;
   onConsentChange: (value: boolean) => void;
@@ -103,16 +109,15 @@ export function UploadRecorder({
       recorder.start();
       setIsRecording(true);
       setElapsedSec(0);
+      const startedAt = Date.now();
 
       timerRef.current = setInterval(() => {
-        setElapsedSec((prev) => {
-          const next = prev + 1;
-          if (next >= MAX_DURATION) {
-            stopRecording();
-          }
-          return next;
-        });
-      }, 1000);
+        const next = Math.floor((Date.now() - startedAt) / 1000);
+        setElapsedSec(next);
+        if (next >= MAX_DURATION) {
+          stopRecording();
+        }
+      }, 250);
     } catch {
       onError("Microphone access was denied or is unavailable. Try uploading a file instead.");
     }
@@ -226,11 +231,11 @@ export function UploadRecorder({
             <button
               type="button"
               onClick={stopRecording}
-              disabled={elapsedSec < MIN_DURATION}
+              disabled={elapsedSec < STOP_UNLOCK_SEC}
               className="mt-1 rounded-full px-5 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
               style={{ backgroundColor: "var(--status-critical)" }}
             >
-              {elapsedSec < MIN_DURATION ? `Stop (available at ${MIN_DURATION}s)` : "Stop recording"}
+              {elapsedSec < STOP_UNLOCK_SEC ? `Stop (available at ${STOP_UNLOCK_SEC}s)` : "Stop recording"}
             </button>
           </>
         ) : (
