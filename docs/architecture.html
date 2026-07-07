@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>PronounceRight — System Architecture</title>
+<style>
+  @page { size: A4; margin: 14mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    color: #0b0b0b;
+    font-size: 9.6pt;
+    line-height: 1.42;
+    margin: 0;
+  }
+  h1 { font-size: 16pt; margin: 0 0 2px 0; }
+  .subtitle { color: #52514e; font-size: 9pt; margin-bottom: 10px; }
+  h2 {
+    font-size: 10.5pt;
+    margin: 12px 0 5px 0;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #e1e0d9;
+  }
+  p { margin: 3px 0; }
+  ul { margin: 3px 0; padding-left: 15px; }
+  li { margin-bottom: 2px; }
+  strong { color: #0b0b0b; }
+  .muted { color: #52514e; }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  th, td { text-align: left; padding: 3px 6px 3px 0; vertical-align: top; font-size: 9.2pt; }
+  th { color: #52514e; font-weight: 600; border-bottom: 1px solid #e1e0d9; }
+  td { border-bottom: 1px solid #f0efec; }
+
+  /* Architecture diagram */
+  .diagram { display: flex; align-items: stretch; gap: 6px; margin: 8px 0 10px 0; }
+  .col { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+  .box {
+    border: 1.5px solid #0b0b0b;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 8.6pt;
+    background: #fcfcfb;
+  }
+  .box.accent { border-color: #2a78d6; }
+  .box .label { font-weight: 700; display: block; margin-bottom: 1px; }
+  .arrow { display: flex; align-items: center; justify-content: center; font-size: 14pt; color: #898781; padding: 0 2px; }
+  .arrow-label { font-size: 7.6pt; color: #898781; text-align: center; }
+
+  .two-col { display: flex; gap: 16px; }
+  .two-col > div { flex: 1; }
+
+  .badge {
+    display: inline-block;
+    font-size: 7.8pt;
+    padding: 1px 5px;
+    border-radius: 8px;
+    background: #f0efec;
+    color: #52514e;
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>PronounceRight — System Architecture</h1>
+<p class="subtitle">Livo AI Software Engineer Assessment · K Ashraf Ahmed · July 2026</p>
+
+<h2>1. Overview &amp; component diagram</h2>
+<p>A learner uploads or records 30–45s of English speech in the browser, which transcodes it to 16kHz mono WAV
+client-side. A FastAPI backend runs Azure AI Speech's Pronunciation Assessment for phoneme-level scoring, then an
+LLM turns the raw scores into plain-language coaching tips. Nothing is persisted server-side.</p>
+
+<div class="diagram">
+  <div class="box accent" style="flex:1">
+    <span class="label">Browser (Next.js, Vercel)</span>
+    Mic record / file upload / sample clips → Web Audio API trims &amp; resamples to 16kHz mono WAV → results dashboard
+  </div>
+  <div class="col"><div class="arrow">→</div><div class="arrow-label">HTTPS<br/>multipart WAV</div></div>
+  <div class="box accent" style="flex:1">
+    <span class="label">FastAPI (Python, Vercel)</span>
+    Validates consent/format/duration → splits audio &gt;28s into 2 chunks → calls Azure → calls LLM → merges &amp; returns JSON
+  </div>
+  <div class="col"><div class="arrow">→</div><div class="arrow-label">REST<br/>(httpx)</div></div>
+  <div class="col">
+    <div class="box">
+      <span class="label">Azure AI Speech</span>
+      Pronunciation Assessment (unscripted), Central India region
+    </div>
+    <div class="box">
+      <span class="label">Gemini → Groq → rule-based</span>
+      Coaching-tip generation (transcript + scores only, never raw audio)
+    </div>
+  </div>
+</div>
+
+<div class="two-col">
+<div>
+<h2>2. Components &amp; why</h2>
+<table>
+<tr><th>Piece</th><th>Choice</th><th>Why over the alternative</th></tr>
+<tr><td>Scoring engine</td><td>Azure AI Speech<br/>Pronunciation Assessment</td><td>Purpose-built GOP-based phoneme scoring with an error-type taxonomy; free F0 tier. A DIY Whisper+wav2vec2+G2P
+stack needs GPU hosting and gives noisier scores; an LLM alone can't reliably judge phoneme accuracy by ear.</td></tr>
+<tr><td>Speech API style</td><td>Plain REST (httpx)</td><td>The Speech SDK is a native binary — heavier serverless
+bundle, slower cold starts. Plain HTTP POST is retryable and has no persistent-connection failure modes.</td></tr>
+<tr><td>Long-audio handling</td><td>Split into 2 sub-30s<br/>chunks, call in parallel</td><td>Azure's short-audio
+endpoint caps pronunciation assessment at ~30s; our required range is 30–45s. Rather than depend on the SDK's
+stateful "continuous mode" streaming session inside a serverless function, we split each clip at its quietest point
+near the midpoint (found by scanning short-window RMS energy) and merge the two results, weighting full-utterance
+scores by chunk duration.</td></tr>
+<tr><td>Coaching LLM</td><td>Gemini 2.5 Flash →<br/>Groq → rule-based</td><td>Three-tier fallback so a bad LLM day
+never breaks the request — scores and highlights always render even if every LLM call fails.</td></tr>
+<tr><td>Audio transcoding</td><td>Client-side (Web Audio API)</td><td>Keeps uploads small (~1.4MB) and
+already-normalized; the backend never needs an audio library.</td></tr>
+<tr><td>Hosting</td><td>Vercel (2 projects,<br/>1 monorepo)</td><td>No idle "sleep" like some free tiers, matching
+the JD's own stack. Frontend and API are separate Vercel projects (each rooted at its own subfolder) to avoid
+mixed-runtime build issues.</td></tr>
+</table>
+
+<h2>3. Scoring &amp; highlighting methodology</h2>
+<ul>
+<li><strong>Sub-scores:</strong> accuracy, fluency, prosody, completeness, and an aggregate <em>PronScore</em>
+returned directly by Azure; the UI shows all four plus the overall gauge.</li>
+<li><strong>Word band:</strong> <span class="badge">good ≥80</span> <span class="badge">warning 60–79</span>
+<span class="badge">critical &lt;60</span>, overridden to critical if Azure flags an explicit
+<code>Mispronunciation</code> error type regardless of score.</li>
+<li><strong>Phoneme drill-down:</strong> clicking a word reveals its phoneme-level accuracy bars (IPA symbols) —
+this is the "what specifically went wrong" layer the assignment asks for, one level below the word heatmap.</li>
+<li><strong>Unscripted mode</strong> (empty reference text) was chosen over scripted reading so the tool works on
+any free-form speech, not just a fixed passage — matching a real learner's use case. The trade-off: without a
+reference transcript, Azure can't tag <code>Omission</code>/<code>Insertion</code> errors (those require a known
+reference), so v1 surfaces mispronunciation and low-accuracy words but not skipped/extra words. See trade-offs.</li>
+</ul>
+</div>
+
+<div>
+<h2>4. DPDP Act 2023 compliance</h2>
+<ul>
+<li><strong>Consent:</strong> explicit checkbox required before any upload; backend rejects requests without it.</li>
+<li><strong>Storage/retention:</strong> audio is held in memory only for the single request that scores it — never
+written to disk, a database, or object storage. The backend retains nothing once the response is sent.</li>
+<li><strong>Data residency:</strong> Azure Speech resource provisioned in Central India. Coaching generation sends
+only the transcript + numeric scores (never raw audio) to Gemini/Groq, which may process outside India — permitted
+under DPDP §16 absent a government restriction on that destination.</li>
+<li><strong>Deletion:</strong> nothing to delete server-side by construction. Client keeps the recording in memory
+only until "Analyze another recording" or the tab closes.</li>
+<li><strong>Rights &amp; grievance:</strong> a dedicated in-app privacy notice covers access/correction/erasure
+rights and a grievance contact, per §11–13.</li>
+</ul>
+
+<h2>5. Reliability (evaluator must never see a cold/broken app)</h2>
+<ul>
+<li>Vercel (not Render) — no 15-min idle sleep; worst case is a ~1s cold start on a tiny httpx-only bundle.</li>
+<li>External keep-alive pinger hits <code>/health</code> every 5 minutes, 24/7, keeping the function warm.</li>
+<li>Frontend fires a background <code>/health</code> ping on page load, so any residual cold start happens while
+the evaluator is still reading, not when they click "Assess."</li>
+<li><code>maxDuration=60s</code> on the assess function; graceful degradation if the LLM layer fails; every error
+path shows a friendly message, never a raw stack trace or blank hang.</li>
+</ul>
+
+<h2>6. Trade-offs &amp; what's next</h2>
+<ul>
+<li><strong>No Omission/Insertion detection</strong> in v1 (see §3). Next: run a first STT pass to get a transcript,
+then a second scripted assessment pass using that transcript as reference text, enabling full miscue detection —
+at the cost of a second sequential API call.</li>
+<li><strong>Per-IP rate limiting is in-memory</strong>, best-effort only — resets on cold start, not shared across
+instances. Next: Redis-backed limiter (e.g. Upstash) for real multi-instance enforcement.</li>
+<li><strong>No accounts or history.</strong> Next: optional sign-in + a Postgres table of past attempts with a
+short retention TTL, so a learner can track improvement over time (would need its own consent/retention story).</li>
+<li><strong>Single-language (en-US).</strong> Azure supports pronunciation assessment in other locales; multi-accent
+reference support (en-IN, en-GB) would make scoring feel fairer to non-US speakers.</li>
+<li><strong>Eval set is small</strong> (2 labeled clips checked for score consistency in <code>evals/</code>).
+Next: a larger human-rated set with inter-rater agreement, to validate the accuracy-score thresholds against real
+learner judgment rather than Azure's raw output.</li>
+</ul>
+</div>
+</div>
+
+</body>
+</html>

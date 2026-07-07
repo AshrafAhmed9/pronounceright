@@ -1,0 +1,12 @@
+[
+  {
+    "file": "sample-clear-pace.wav",
+    "expected_overall_band": "good",
+    "notes": "Native-voice TTS at a natural ~175 wpm reading pace. Expect high accuracy, fluency, and prosody scores (roughly 80+)."
+  },
+  {
+    "file": "sample-rapid-speech.wav",
+    "expected_overall_band": "warning",
+    "notes": "Same script as sample-clear-pace, same voice, spoken at ~220 wpm. Words should still be individually accurate (clear TTS articulation), but fluency/prosody should score noticeably lower than sample-clear-pace, dragging the overall score down. This is the app's key nuance: a speaker can pronounce every word correctly and still lose points for pace/rhythm."
+  }
+]
