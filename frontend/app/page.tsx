@@ -132,12 +132,12 @@ export default function Home() {
 
       {appState === "results" && result && (
         <div className="flex flex-col gap-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[var(--text-secondary)]">{sourceLabel}</p>
             <button
               type="button"
               onClick={handleReset}
-              className="rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-medium text-[var(--text-primary)]"
+              className="shrink-0 self-start rounded-full border border-[var(--border)] px-4 py-1.5 text-sm font-medium text-[var(--text-primary)] sm:self-auto"
             >
               Analyze another recording
             </button>
