@@ -5,7 +5,7 @@ seconds of English speech and get an instant pronunciation score, with
 specific words and phonemes highlighted so a learner knows exactly what to
 practice.
 
-**Live app:** https://frontend-ten-liart-80.vercel.app
+**Live app:** https://frontend-khaki-sigma-66.vercel.app
 **Repo:** https://github.com/AshrafAhmed9/pronounceright
 **Architecture doc:** [`docs/architecture.pdf`](docs/architecture.pdf)
 
