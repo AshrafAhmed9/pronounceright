@@ -100,20 +100,21 @@ LLM turns the raw scores into plain-language coaching tips. Nothing is persisted
 <tr><th>Piece</th><th>Choice</th><th>Why over the alternative</th></tr>
 <tr><td>Scoring engine</td><td>Azure AI Speech<br/>Pronunciation Assessment</td><td>Purpose-built GOP-based phoneme scoring with an error-type taxonomy; free F0 tier. A DIY Whisper+wav2vec2+G2P
 stack needs GPU hosting and gives noisier scores; an LLM alone can't reliably judge phoneme accuracy by ear.</td></tr>
-<tr><td>Speech API style</td><td>Plain REST (httpx)</td><td>The Speech SDK is a native binary — heavier serverless
-bundle, slower cold starts. Plain HTTP POST is retryable and has no persistent-connection failure modes.</td></tr>
+<tr><td>Speech API style</td><td>Plain REST (httpx)</td><td>The Speech SDK is a native binary, which means a heavier
+serverless bundle and slower cold starts. A plain HTTP POST is retryable and doesn't carry any persistent-connection
+failure modes.</td></tr>
 <tr><td>Long-audio handling</td><td>Split into 2 sub-30s<br/>chunks, call in parallel</td><td>Azure's short-audio
 endpoint caps pronunciation assessment at ~30s; our required range is 30–45s. Rather than depend on the SDK's
 stateful "continuous mode" streaming session inside a serverless function, we split each clip at its quietest point
 near the midpoint (found by scanning short-window RMS energy) and merge the two results, weighting full-utterance
 scores by chunk duration.</td></tr>
 <tr><td>Coaching LLM</td><td>Gemini 2.5 Flash →<br/>Groq → rule-based</td><td>Three-tier fallback so a bad LLM day
-never breaks the request — scores and highlights always render even if every LLM call fails.</td></tr>
+never breaks the request. Scores and highlights still render even if every LLM call fails.</td></tr>
 <tr><td>Audio transcoding</td><td>Client-side (Web Audio API)</td><td>Keeps uploads small (~1.4MB) and
-already-normalized; the backend never needs an audio library.</td></tr>
-<tr><td>Hosting</td><td>Vercel (2 projects,<br/>1 monorepo)</td><td>No idle "sleep" like some free tiers, matching
-the JD's own stack. Frontend and API are separate Vercel projects (each rooted at its own subfolder) to avoid
-mixed-runtime build issues.</td></tr>
+already-normalized, so the backend never needs an audio library at all.</td></tr>
+<tr><td>Hosting</td><td>Vercel (2 projects,<br/>1 monorepo)</td><td>No idle "sleep" like some free tiers, which
+matters here, and it happens to match the JD's own stack. Frontend and API are separate Vercel projects (each
+rooted at its own subfolder) to avoid mixed-runtime build issues.</td></tr>
 </table>
 
 <h2>3. Scoring &amp; highlighting methodology</h2>
@@ -123,10 +124,11 @@ returned directly by Azure; the UI shows all four plus the overall gauge.</li>
 <li><strong>Word band:</strong> <span class="badge">good ≥80</span> <span class="badge">warning 60–79</span>
 <span class="badge">critical &lt;60</span>, overridden to critical if Azure flags an explicit
 <code>Mispronunciation</code> error type regardless of score.</li>
-<li><strong>Phoneme drill-down:</strong> clicking a word reveals its phoneme-level accuracy bars (IPA symbols) —
-this is the "what specifically went wrong" layer the assignment asks for, one level below the word heatmap.</li>
+<li><strong>Phoneme drill-down:</strong> clicking a word reveals its phoneme-level accuracy bars (IPA symbols).
+This is the "what specifically went wrong" layer the assignment asks for, one level below the word heatmap.</li>
 <li><strong>Unscripted mode</strong> (empty reference text) was chosen over scripted reading so the tool works on
-any free-form speech, not just a fixed passage — matching a real learner's use case. The trade-off: without a
+any free-form speech, not just a fixed passage, which matches how a real learner would actually use it. The
+trade-off: without a
 reference transcript, Azure can't tag <code>Omission</code>/<code>Insertion</code> errors (those require a known
 reference), so v1 surfaces mispronunciation and low-accuracy words but not skipped/extra words. See trade-offs.</li>
 </ul>
@@ -136,11 +138,11 @@ reference), so v1 surfaces mispronunciation and low-accuracy words but not skipp
 <h2>4. DPDP Act 2023 compliance</h2>
 <ul>
 <li><strong>Consent:</strong> explicit checkbox required before any upload; backend rejects requests without it.</li>
-<li><strong>Storage/retention:</strong> audio is held in memory only for the single request that scores it — never
-written to disk, a database, or object storage. The backend retains nothing once the response is sent.</li>
+<li><strong>Storage/retention:</strong> audio is held in memory only for the single request that scores it, and is
+never written to disk, a database, or object storage. The backend retains nothing once the response is sent.</li>
 <li><strong>Data residency:</strong> Azure Speech resource provisioned in Central India. Coaching generation sends
-only the transcript + numeric scores (never raw audio) to Gemini/Groq, which may process outside India — permitted
-under DPDP §16 absent a government restriction on that destination.</li>
+only the transcript + numeric scores (never raw audio) to Gemini/Groq, which may process outside India. That's
+permitted under DPDP §16, since there's no government restriction on that destination.</li>
 <li><strong>Deletion:</strong> nothing to delete server-side by construction. Client keeps the recording in memory
 only until "Analyze another recording" or the tab closes.</li>
 <li><strong>Rights &amp; grievance:</strong> a dedicated in-app privacy notice covers access/correction/erasure
@@ -149,21 +151,21 @@ rights and a grievance contact, per §11–13.</li>
 
 <h2>5. Reliability (evaluator must never see a cold/broken app)</h2>
 <ul>
-<li>Vercel (not Render) — no 15-min idle sleep; worst case is a ~1s cold start on a tiny httpx-only bundle.</li>
-<li>External keep-alive pinger hits <code>/health</code> every 5 minutes, 24/7, keeping the function warm.</li>
-<li>Frontend fires a background <code>/health</code> ping on page load, so any residual cold start happens while
-the evaluator is still reading, not when they click "Assess."</li>
-<li><code>maxDuration=60s</code> on the assess function; graceful degradation if the LLM layer fails; every error
-path shows a friendly message, never a raw stack trace or blank hang.</li>
+<li>Vercel, not Render: no 15-min idle sleep, so the worst case is a ~1s cold start on a tiny httpx-only bundle.</li>
+<li>An external keep-alive pinger hits <code>/health</code> every 5 minutes, 24/7, keeping the function warm.</li>
+<li>The frontend also fires a background <code>/health</code> ping on page load, so any residual cold start happens
+while the evaluator is still reading the page, not the moment they click "Assess."</li>
+<li><code>maxDuration=60s</code> on the assess function, graceful degradation if the LLM layer fails, and every
+error path shows a friendly message rather than a raw stack trace or a blank hang.</li>
 </ul>
 
 <h2>6. Trade-offs &amp; what's next</h2>
 <ul>
 <li><strong>No Omission/Insertion detection</strong> in v1 (see §3). Next: run a first STT pass to get a transcript,
-then a second scripted assessment pass using that transcript as reference text, enabling full miscue detection —
-at the cost of a second sequential API call.</li>
-<li><strong>Per-IP rate limiting is in-memory</strong>, best-effort only — resets on cold start, not shared across
-instances. Next: Redis-backed limiter (e.g. Upstash) for real multi-instance enforcement.</li>
+then a second scripted assessment pass using that transcript as reference text, which would enable full miscue
+detection at the cost of a second sequential API call.</li>
+<li><strong>Per-IP rate limiting is in-memory</strong>, best-effort only. It resets on cold start and isn't shared
+across instances. Next: a Redis-backed limiter (e.g. Upstash) for real multi-instance enforcement.</li>
 <li><strong>No accounts or history.</strong> Next: optional sign-in + a Postgres table of past attempts with a
 short retention TTL, so a learner can track improvement over time (would need its own consent/retention story).</li>
 <li><strong>Single-language (en-US).</strong> Azure supports pronunciation assessment in other locales; multi-accent

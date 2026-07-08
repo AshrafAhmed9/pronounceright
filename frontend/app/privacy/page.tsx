@@ -32,8 +32,8 @@ export default function PrivacyPage() {
       <Section title="Consent">
         <p>
           Processing only happens after you explicitly check the consent box on the home page.
-          You can withdraw consent at any time simply by not submitting further recordings — no
-          account or persistent identifier exists to withdraw.
+          You can withdraw consent at any time simply by not submitting further recordings; there
+          is no account or persistent identifier to withdraw from in the first place.
         </p>
       </Section>
 
@@ -54,12 +54,12 @@ export default function PrivacyPage() {
         </p>
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li>
-            <strong>Microsoft Azure AI Speech</strong> — receives the audio to compute
+            <strong>Microsoft Azure AI Speech</strong>: receives the audio to compute
             pronunciation scores. Configured to a data center in India where available.
           </li>
           <li>
-            <strong>Google Gemini / Groq</strong> — receives only the recognized transcript and
-            numeric scores (never the raw audio) to generate coaching tips.
+            <strong>Google Gemini / Groq</strong>: receives only the recognized transcript and
+            numeric scores (never the raw audio), used to generate coaching tips.
           </li>
         </ul>
         <p className="mt-2">
